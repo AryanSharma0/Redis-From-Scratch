@@ -1,5 +1,5 @@
-#include <include/CommandHandler.h>
-
+#include <CommandHandler.h>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -162,6 +162,11 @@ std::string CommandHandler::processComand(std::string &commandline)
     auto cmds = parseRespCmds(commandline);
     if (cmds.empty())
         return "Error: Empty Commands\r\n";
+
+    for (auto &t : cmds)
+    {
+        std::cout << t << '\n';
+    }
     std::string cmd = cmds[0];
     std::transform(cmd.begin(), cmd.end(), cmd.begin(), ::toupper);
     std::ostringstream response;

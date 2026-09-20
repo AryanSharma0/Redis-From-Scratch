@@ -8,4 +8,4 @@ public:
     std::string processComand(std::string &commandline);
 };
 
-#endif COMMAND_HANDLER
+#endif
