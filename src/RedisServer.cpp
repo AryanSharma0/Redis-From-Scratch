@@ -17,7 +17,7 @@ void signalHandler(int signum)
 {
     if (globalServer)
     {
-        std::cout << "Caught signal" << signum << ", shutting down...\n";
+        std::cout << "Caught signal " << signum << ", shutting down...\n";
         globalServer->shutdown();
     }
     exit(signum);
