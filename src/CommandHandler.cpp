@@ -1,271 +1,302 @@
-#include <CommandHandler.h>
-#include <iostream>
-#include <sstream>
+#include "../include/CommandHandler.h"
+#include "../include/RESPParser.h"
+#include "../include/RedisDatabase.h"
+
+#include <algorithm>
+#include <cctype>
 #include <string>
 #include <vector>
-#include <algorithm>
-#include "../include/RedisDatabase.h"
-/*
-    RESP Parser
 
-        *2\r\n
-        $4\r\n
-        PING\r\n
-        $4\r\n
-        Test\r\n
-
-    2-> array has 2 elements
-    $4-> next string has 4 character
-
-    CRLF = Carriage Return(\r) + Line Feed(\n)
-
-*/
-
-std::vector<std::string> parseRespCmds(const std::string &input)
+std::string CommandHandler::processCommand(
+    const std::string &commandLine)
 {
-    std::vector<std::string> cmds;
+    const std::vector<std::string> commands =
+        RESPParser::parse(commandLine);
 
-    if (input.empty())
+    if (commands.empty())
     {
-        return cmds;
+        return "-Error empty command\r\n";
     }
 
-    //  Handle simple space-separated commands
-    if (input[0] != '*')
-    {
-        std::istringstream iss(input);
-        std::string cmd;
+    std::string command = commands[0];
 
-        while (iss >> cmd)
+    // Convert command to uppercase
+    std::transform(
+        command.begin(),
+        command.end(),
+        command.begin(),
+        [](unsigned char c)
         {
-            cmds.push_back(cmd);
-        }
+            return static_cast<char>(std::toupper(c));
+        });
 
-        return cmds;
+    RedisDatabase &db =
+        RedisDatabase::getInstance();
+
+    /*
+        Command routing
+    */
+
+    if (command == "PING")
+    {
+        return handlePing(commands);
     }
 
-    size_t pos = 1;
-
-    // Find CRLF after the number of elements
-    size_t crlf = input.find("\r\n", pos);
-
-    if (crlf == std::string::npos)
+    if (command == "ECHO")
     {
-        return cmds;
+        return handleEcho(commands);
     }
 
-    //  Read number of elements
-
-    int numElements = 0;
-
-    try
+    if (command == "SET")
     {
-        numElements = std::stoi(
-            input.substr(pos, crlf - pos));
-    }
-    catch (...)
-    {
-        return cmds;
+        return handleSet(db, commands);
     }
 
-    if (numElements < 0)
+    if (command == "GET")
     {
-        return cmds;
+        return handleGet(db, commands);
     }
 
-    // Move past "*2\r\n"
-
-    pos = crlf + 2;
-
-    //  Parse every RESP element
-
-    for (int i = 0; i < numElements; i++)
+    if (command == "DEL" ||
+        command == "UNLINK")
     {
-        if (pos >= input.size())
-        {
-            return {};
-        }
-
-        // Every bulk string should start with '$'
-        // $4\r\nPING\r\n
-
-        if (input[pos] != '$')
-        {
-            return {};
-        }
-
-        // Skip '$'
-        pos++;
-        crlf = input.find("\r\n", pos);
-
-        if (crlf == std::string::npos)
-        {
-            return {};
-        }
-
-        int len = 0;
-
-        try
-        {
-            len = std::stoi(
-                input.substr(pos, crlf - pos));
-        }
-        catch (...)
-        {
-            return {};
-        }
-
-        if (len < 0)
-        {
-            return {};
-        }
-
-        // Move past "$4\r\n"
-
-        pos = crlf + 2;
-        if (pos + len > input.size())
-        {
-            return {};
-        }
-
-        std::string token = input.substr(pos, len);
-
-        cmds.push_back(token);
-
-        pos += len;
-
-        // ----------------------------------------------
-        // Expect CRLF after the string
-        // ----------------------------------------------
-
-        if (pos + 2 > input.size())
-        {
-            return {};
-        }
-
-        if (input.substr(pos, 2) != "\r\n")
-        {
-            return {};
-        }
-
-        // Skip CRLF
-        pos += 2;
+        return handleDelete(db, commands);
     }
 
-    return cmds;
+    if (command == "EXPIRE")
+    {
+        return handleExpire(db, commands);
+    }
+
+    if (command == "RENAME")
+    {
+        return handleRename(db, commands);
+    }
+
+    if (command == "KEYS")
+    {
+        return handleKeys(db);
+    }
+
+    if (command == "TYPE")
+    {
+        return handleType(db, commands);
+    }
+
+    if (command == "FLUSHALL")
+    {
+        return handleFlushAll(db);
+    }
+
+    return "-Error unknown command\r\n";
 }
 
-CommandHandler::CommandHandler() {}
-
-std::string CommandHandler::processComand(std::string &commandline)
+//    PING
+std::string CommandHandler::handlePing(
+    const std::vector<std::string> &commands)
 {
-    auto cmds = parseRespCmds(commandline);
-    if (cmds.empty())
-        return "Error: Empty Commands\r\n";
+    if (commands.size() > 1)
+    {
+        return "$" +
+               std::to_string(commands[1].size()) +
+               "\r\n" +
+               commands[1] +
+               "\r\n";
+    }
 
-    std::string cmd = cmds[0];
-    std::transform(cmd.begin(), cmd.end(), cmd.begin(), ::toupper);
-    std::ostringstream response;
+    return "+PONG\r\n";
+}
 
-    RedisDatabase &db = RedisDatabase::getInstance();
+// Echo
+std::string CommandHandler::handleEcho(
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 2)
+    {
+        return "-Error wrong number of arguments for 'echo'\r\n";
+    }
 
-    if (cmd == "PING")
+    const std::string &message = commands[1];
+
+    return "$" +
+           std::to_string(message.size()) +
+           "\r\n" +
+           message +
+           "\r\n";
+}
+
+// SET key value
+std::string CommandHandler::handleSet(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 3)
     {
-        response << "PONG\r\n";
+        return "-Error wrong number of arguments for 'set'\r\n";
     }
-    else if (cmd == "ECHO")
+
+    const std::string &key = commands[1];
+    const std::string &value = commands[2];
+
+    db.set(key, value);
+
+    return "+OK\r\n";
+}
+
+// GET key
+
+std::string CommandHandler::handleGet(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 2)
     {
-        if (cmds.size() < 2)
-        {
-            response << "Error : ECHO requires a message\r\n";
-        }
-        else
-        {
-            response << cmds[1] << "\r\n";
-        }
-        response << "...\r\n";
+        return "-Error wrong number of arguments for 'get'\r\n";
     }
-    else if (cmd == "FLUSHALL")
+
+    const std::string &key = commands[1];
+
+    std::string value;
+
+    if (!db.get(key, value))
     {
-        db.flushAll();
-        response << "Ok\r\n";
+        // RESP Null Bulk String
+        return "$-1\r\n";
     }
-    // key value operations
-    else if (cmd == "SET")
+
+    return "$" +
+           std::to_string(value.size()) +
+           "\r\n" +
+           value +
+           "\r\n";
+}
+
+// DEL / UNLINK key
+
+std::string CommandHandler::handleDelete(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 2)
     {
-        if (cmds.size() < 3)
-        {
-            response << "Error : SET requires key value pair\r\n";
-        }
-        else
-        {
-            db.set(cmds[1], cmds[2]);
-            response << "Ok\r\n";
-        }
+        return "-Error wrong number of arguments for 'del'\r\n";
     }
-    else if (cmd == "GET")
+
+    const std::string &key = commands[1];
+
+    const bool deleted = db.del(key);
+
+    /*
+        Redis integer response:
+
+        1 -> key was deleted
+        0 -> key didn't exist
+    */
+
+    return ":" +
+           std::string(deleted ? "1" : "0") +
+           "\r\n";
+}
+
+// EXPIRE key seconds
+std::string CommandHandler::handleExpire(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 3)
     {
-        if (cmds.size() < 2)
-        {
-            response << "Error : GET requires key name\r\n";
-        }
-        else
-        {
-            std::string value;
-            if (db.get(cmds[1], value))
-                response << value.size() << "\r\n"
-                         << value << "\r\n";
-            else
-                response << "-1\r\n";
-        }
+        return "-Error wrong number of arguments for 'expire'\r\n";
     }
-    else if (cmd == "KEYS")
+
+    const std::string &key = commands[1];
+    const std::string &seconds = commands[2];
+
+    bool result = db.expire(key, seconds);
+
+    return ":" +
+           std::string(result ? "1" : "0") +
+           "\r\n";
+}
+
+// RENAME oldKey newKey
+
+std::string CommandHandler::handleRename(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 3)
     {
-        std::vector<std::string> allKeys = db.keys();
-        // response << "*" << allKeys.size() << "\r\n";
-        for (const auto &key : allKeys)
-            response << key << "\r\n";
+        return "-Error wrong number of arguments for 'rename'\r\n";
     }
-    else if (cmd == "TYPE")
+
+    const std::string &oldKey = commands[1];
+    const std::string &newKey = commands[2];
+
+    bool result =
+        db.rename(oldKey, newKey);
+
+    if (!result)
     {
-        if (cmds.size() < 2)
-            response << "Error : TYPE requires key name\r\n";
-        else
-            response << db.type(cmds[1]) << "\r\n ";
+        return "-Error no such key\r\n";
     }
-    else if (cmd == "DEL" || cmd == "UNLINK")
+
+    return "+OK\r\n";
+}
+
+// KEYS
+std::string CommandHandler::handleKeys(
+    RedisDatabase &db)
+{
+    const std::vector<std::string> keys =
+        db.keys();
+
+    /*
+        For now we return a RESP array.
+    */
+
+    std::string response =
+        "*" +
+        std::to_string(keys.size()) +
+        "\r\n";
+
+    for (const auto &key : keys)
     {
-        if (cmds.size() < 2)
-            response << "Error : " << cmd << " requires key name\r\n";
-        else
-        {
-            bool res = db.del(cmds[1]);
-            response << (res ? 0 : 1) << "\r\n ";
-        }
+        response +=
+            "$" +
+            std::to_string(key.size()) +
+            "\r\n" +
+            key +
+            "\r\n";
     }
-    else if (cmd == "EXPIRE")
+
+    return response;
+}
+
+// TYPE key
+std::string CommandHandler::handleType(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 2)
     {
-        if (cmds.size() < 3)
-            response << "Error : Expire requires key and time in seconds\r\n";
-        else
-        {
-            db.expire(cmds[1], cmds[2]);
-            response << "OK" << "\r\n ";
-        }
+        return "-Error wrong number of arguments for 'type'\r\n";
     }
-    else if (cmd == "RENAME")
-    {
-        if (cmds.size() < 3)
-            response << "Error : RENAME requires old and new keys also\r\n";
-        else
-        {
-            db.rename(cmds[1], cmds[2]);
-            response << "OK " << "\r\n ";
-        }
-    }
-    else
-    {
-        response << "Error:Unknown command\r\n";
-    }
-    return response.str();
+
+    const std::string &key = commands[1];
+
+    const std::string type =
+        db.type(key);
+
+    return "+" +
+           type +
+           "\r\n";
+}
+
+// FLUSHALL
+std::string CommandHandler::handleFlushAll(
+    RedisDatabase &db)
+{
+    db.flushAll();
+
+    return "+OK\r\n";
 }

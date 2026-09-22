@@ -139,7 +139,7 @@ void RedisServer::run()
                 int bytes=recv(client_socket,buffer, sizeof(buffer)-1,0);
                 if(bytes<=0)break;
                 std::string request(buffer,bytes);
-                std:: string response=cmdHandler.processComand(request);
+                std:: string response=cmdHandler.processCommand(request);
                 send(client_socket,response.c_str(),response.size(),0);
             } 
         close(client_socket); });
