@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
-
+#include "../include/RedisDatabase.h"
 /*
     RESP Parser
 
@@ -171,5 +171,20 @@ std::string CommandHandler::processComand(std::string &commandline)
     std::transform(cmd.begin(), cmd.end(), cmd.begin(), ::toupper);
     std::ostringstream response;
 
+    RedisDatabase &db = RedisDatabase::getInstance();
+
+    if (cmd == "PING")
+    {
+        response << "PONG\r\n";
+    }
+    else if (cmd == "ECHO")
+    {
+        response << "...\r\n";
+    }
+    // Different operations
+    else
+    {
+        response << "Error:Unknown command\r\n";
+    }
     return response.str();
 }
