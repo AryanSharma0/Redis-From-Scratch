@@ -85,10 +85,6 @@ private:
         RedisDatabase &db,
         const std::vector<std::string> &commands);
 
-    std::string handleLSet(
-        RedisDatabase &db,
-        const std::vector<std::string> &commands);
-
     std::string handleHSet(
         RedisDatabase &db,
         const std::vector<std::string> &commands);

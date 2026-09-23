@@ -531,7 +531,7 @@ std::string CommandHandler::handleHGet(
     if (db.hget(commands[1], commands[2], value))
         return "$" + std::to_string(value.size()) + "\r\n" + value + "\r\n";
     else
-        "$-1\r\n";
+        return "$-1\r\n";
 }
 
 std::string CommandHandler::handleHExist(
@@ -621,6 +621,7 @@ std::string CommandHandler::handleHGetAll(
         oss << "$" + pair.second.size() << "\r\n"
             << pair.second << "\r\n ";
     }
+    return oss.str();
 }
 
 std::string CommandHandler::handleHMSet(
@@ -630,10 +631,10 @@ std::string CommandHandler::handleHMSet(
     if (commands.size() < 4 || (commands.size() % 2 == 0))
         return "-Error HMSET requires key, field and value pairs \r\n";
     std::vector<std::pair<std::string, std::string>> fieldvalues;
-    for (ssize_t i = 2; i < commands.size(); i += 2)
+    for (size_t i = 2; i < commands.size(); i += 2)
     {
         fieldvalues.emplace_back(commands[i], commands[i + 1]);
         db.hmset(commands[1], fieldvalues);
-        return "+Ok\r\n";
     }
+    return "+Ok\r\n";
 }
