@@ -1,5 +1,4 @@
-K test1 adfasdf
-K test hi
-K name aryan
-K value 1
-K temp 4
+K session:1 "data"
+K car audi
+L mylist "a" "new "b" "c" "d" "4" 
+L mytest 3 "2" "5" "44" 

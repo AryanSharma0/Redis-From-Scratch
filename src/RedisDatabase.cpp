@@ -3,6 +3,8 @@
 #include <fstream>
 #include <sstream>
 #include <chrono>
+#include <algorithm>
+
 RedisDatabase &RedisDatabase::getInstance()
 {
     static RedisDatabase instance;
@@ -20,23 +22,6 @@ bool RedisDatabase::flushAll()
     return true;
 };
 
-// Key value operations
-void RedisDatabase::set(const std::string &key, const std::string &value)
-{
-    std::lock_guard<std::mutex> lock(db_mutex);
-    kv_store[key] = value;
-};
-bool RedisDatabase::get(const std::string &key, std::string &value)
-{
-    std::lock_guard<std::mutex> lock(db_mutex);
-    auto it = kv_store.find(key);
-    if (it != kv_store.end())
-    {
-        value = it->second;
-        return true;
-    }
-    return false;
-};
 std::vector<std::string> RedisDatabase::keys()
 {
     std::lock_guard<std::mutex> lock(db_mutex);
@@ -55,6 +40,7 @@ std::vector<std::string> RedisDatabase::keys()
     }
     return res;
 };
+
 std::string RedisDatabase::type(const std::string &key)
 {
     std::lock_guard<std::mutex> lock(db_mutex);
@@ -67,6 +53,7 @@ std::string RedisDatabase::type(const std::string &key)
     else
         return "none";
 };
+
 bool RedisDatabase::del(const std::string &key)
 {
     std::lock_guard<std::mutex> lock(db_mutex);
@@ -124,6 +111,165 @@ bool RedisDatabase::rename(const std::string &oldKey, const std::string &newKey)
     return found;
 };
 
+// Key value operations
+void RedisDatabase::set(const std::string &key, const std::string &value)
+{
+    std::lock_guard<std::mutex> lock(db_mutex);
+    kv_store[key] = value;
+};
+
+bool RedisDatabase::get(const std::string &key, std::string &value)
+{
+    std::lock_guard<std::mutex> lock(db_mutex);
+    auto it = kv_store.find(key);
+    if (it != kv_store.end())
+    {
+        value = it->second;
+        return true;
+    }
+    return false;
+};
+
+// List operations
+
+ssize_t RedisDatabase::llen(const std::string &key)
+{
+    std::lock_guard<std::mutex> lock(db_mutex);
+    auto it = list_store.find(key);
+    if (it != list_store.end())
+        return it->second.size();
+    return 0;
+};
+
+void RedisDatabase::lpush(const std::string &key, const std::vector<std::string> &list)
+{
+    std::lock_guard<std::mutex> lock(db_mutex);
+    for (auto value : list)
+        list_store[key].insert(list_store[key].begin(), value);
+};
+
+void RedisDatabase::rpush(const std::string &key, const std::vector<std::string> &list)
+{
+    std::lock_guard<std::mutex> lock(db_mutex);
+    for (auto value : list)
+        list_store[key].push_back(value);
+};
+
+bool RedisDatabase::lpop(const std::string &key, std::string &value)
+{
+    std::lock_guard<std::mutex> lock(db_mutex);
+    auto it = list_store.find(key);
+    if (it != list_store.end() && !it->second.empty())
+    {
+        value = it->second.front();
+        it->second.erase(it->second.begin());
+        return true;
+    }
+    return false;
+};
+
+bool RedisDatabase::rpop(const std::string &key, std::string &value)
+{
+    std::lock_guard<std::mutex> lock(db_mutex);
+    auto it = list_store.find(key);
+    if (it != list_store.end() && !it->second.empty())
+    {
+        value = it->second.back();
+        it->second.pop_back();
+        return true;
+    }
+    return false;
+};
+
+int RedisDatabase::lrem(const std::string &key, int count, const std::string &value)
+{
+    std::lock_guard<std::mutex> lock(db_mutex);
+    int removed = 0;
+    auto it = list_store.find(key);
+    if (it == list_store.end())
+        return 0;
+    auto &lst = it->second;
+    if (count == 0)
+    {
+        auto new_end = std::remove(lst.begin(), lst.end(), value);
+        removed = std::distance(new_end, lst.end());
+        lst.erase(new_end, lst.end());
+    }
+    else if (count > 0)
+    {
+        //  remove element from head to tail (count is +ive)
+        for (auto itr = lst.begin(); itr != lst.end() && removed < count;)
+        {
+            if (*itr == value)
+            {
+                itr = lst.erase(itr);
+                ++removed;
+            }
+            else
+            {
+                ++itr;
+            }
+        }
+    }
+    else
+    {
+        //  remove element from last (count is -ive)
+        count = -count;
+        for (auto itr = lst.end(); itr != lst.begin() && removed < count;)
+        {
+            --itr;
+            if (*itr == value)
+            {
+                itr = lst.erase(itr);
+                ++removed;
+            }
+        }
+    }
+    if (lst.empty())
+        list_store.erase(it);
+    return removed;
+};
+
+bool RedisDatabase::lindex(const std::string &key, int index, std::string &value)
+{
+    std::lock_guard<std::mutex> lock(db_mutex);
+    auto it = list_store.find(key);
+    const auto &lst = it->second;
+    if (it == list_store.end())
+        return false;
+    if (index < 0)
+        index = static_cast<ssize_t>(lst.size()) + index;
+
+    if (index < 0)
+        return false;
+
+    if (static_cast<size_t>(index) >= lst.size())
+        return false;
+
+    value = lst[index];
+    return true;
+};
+
+bool RedisDatabase::lset(const std::string &key, int index, const std::string &value)
+{
+    std::lock_guard<std::mutex> lock(db_mutex);
+    auto it = list_store.find(key);
+    auto &lst = it->second;
+    if (it == list_store.end())
+        return false;
+    if (index < 0)
+        index = static_cast<ssize_t>(lst.size()) + index;
+
+    if (index < 0)
+        return false;
+
+    if (static_cast<size_t>(index) >= lst.size())
+        return false;
+
+    lst[index] = value;
+    return true;
+};
+
 // Data Persistance
 bool RedisDatabase::dump(const std::string &filename)
 {
@@ -148,7 +294,7 @@ bool RedisDatabase::dump(const std::string &filename)
     {
         ofs << "L " << kv.first << " ";
         for (const auto &item : kv.second)
-            ofs << item;
+            ofs << item << " ";
         ofs << "\n";
     }
     for (const auto &kv : hash_store)
@@ -162,6 +308,7 @@ bool RedisDatabase::dump(const std::string &filename)
     }
     return true;
 }
+
 bool RedisDatabase::load(const std::string &filename)
 {
     std::lock_guard<std::mutex> lock(db_mutex);

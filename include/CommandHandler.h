@@ -50,6 +50,40 @@ private:
 
     std::string handleFlushAll(
         RedisDatabase &db);
+
+    // ========== List operations ==========
+
+    std::string handleLLen(
+        RedisDatabase &db,
+        const std::vector<std::string> &commands);
+
+    std::string handleLPush(
+        RedisDatabase &db,
+        const std::vector<std::string> &commands);
+
+    std::string handleRPush(
+        RedisDatabase &db,
+        const std::vector<std::string> &commands);
+
+    std::string handleLPop(
+        RedisDatabase &db,
+        const std::vector<std::string> &commands);
+
+    std::string handleRPop(
+        RedisDatabase &db,
+        const std::vector<std::string> &commands);
+
+    std::string handleLRem(
+        RedisDatabase &db,
+        const std::vector<std::string> &commands);
+
+    std::string handleLIndex(
+        RedisDatabase &db,
+        const std::vector<std::string> &commands);
+
+    std::string handleLSet(
+        RedisDatabase &db,
+        const std::vector<std::string> &commands);
 };
 
 #endif

@@ -88,8 +88,50 @@ std::string CommandHandler::processCommand(
         return handleFlushAll(db);
     }
 
+    if (command == "LLEN")
+    {
+        return handleLLen(db, commands);
+    }
+
+    if (command == "LPUSH")
+    {
+        return handleLPush(db, commands);
+    }
+
+    if (command == "RPUSH")
+    {
+        return handleRPush(db, commands);
+    }
+
+    if (command == "LPOP")
+    {
+        return handleLPop(db, commands);
+    }
+
+    if (command == "RPOP")
+    {
+        return handleRPop(db, commands);
+    }
+
+    if (command == "LREM")
+    {
+        return handleLRem(db, commands);
+    }
+
+    if (command == "LINDEX")
+    {
+        return handleLIndex(db, commands);
+    }
+
+    if (command == "LSET")
+    {
+        return handleLSet(db, commands);
+    }
+
     return "-Error unknown command\r\n";
 }
+
+// ========== Common Operations ==========
 
 //    PING
 std::string CommandHandler::handlePing(
@@ -113,61 +155,30 @@ std::string CommandHandler::handleEcho(
 {
     if (commands.size() < 2)
     {
-        return "-Error wrong number of arguments for 'echo'\r\n";
+        return "-ERR wrong number of arguments for 'echo'\r\n";
     }
 
-    const std::string &message = commands[1];
+    std::string message;
+
+    for (size_t i = 1; i < commands.size(); ++i)
+    {
+        if (i > 1)
+            message += " ";
+
+        message += commands[i];
+    }
+
+    if (message.size() >= 2 &&
+        message.front() == '"' &&
+        message.back() == '"')
+    {
+        message = message.substr(1, message.size() - 2);
+    }
 
     return "$" +
            std::to_string(message.size()) +
            "\r\n" +
            message +
-           "\r\n";
-}
-
-// SET key value
-std::string CommandHandler::handleSet(
-    RedisDatabase &db,
-    const std::vector<std::string> &commands)
-{
-    if (commands.size() < 3)
-    {
-        return "-Error wrong number of arguments for 'set'\r\n";
-    }
-
-    const std::string &key = commands[1];
-    const std::string &value = commands[2];
-
-    db.set(key, value);
-
-    return "+OK\r\n";
-}
-
-// GET key
-
-std::string CommandHandler::handleGet(
-    RedisDatabase &db,
-    const std::vector<std::string> &commands)
-{
-    if (commands.size() < 2)
-    {
-        return "-Error wrong number of arguments for 'get'\r\n";
-    }
-
-    const std::string &key = commands[1];
-
-    std::string value;
-
-    if (!db.get(key, value))
-    {
-        // RESP Null Bulk String
-        return "$-1\r\n";
-    }
-
-    return "$" +
-           std::to_string(value.size()) +
-           "\r\n" +
-           value +
            "\r\n";
 }
 
@@ -219,7 +230,6 @@ std::string CommandHandler::handleExpire(
 }
 
 // RENAME oldKey newKey
-
 std::string CommandHandler::handleRename(
     RedisDatabase &db,
     const std::vector<std::string> &commands)
@@ -299,4 +309,174 @@ std::string CommandHandler::handleFlushAll(
     db.flushAll();
 
     return "+OK\r\n";
+}
+
+// ========== Key value operations ==========
+// SET key value
+std::string CommandHandler::handleSet(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 3)
+    {
+        return "-Error wrong number of arguments for 'set'\r\n";
+    }
+
+    const std::string &key = commands[1];
+    const std::string &value = commands[2];
+
+    db.set(key, value);
+
+    return "+OK\r\n";
+}
+
+// GET key
+std::string CommandHandler::handleGet(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 2)
+    {
+        return "-Error wrong number of arguments for 'get'\r\n";
+    }
+
+    const std::string &key = commands[1];
+
+    std::string value;
+
+    if (!db.get(key, value))
+    {
+        // RESP Null Bulk String
+        return "$-1\r\n";
+    }
+
+    return "$" +
+           std::to_string(value.size()) +
+           "\r\n" +
+           value +
+           "\r\n";
+}
+
+// ========== List operations ==========
+std::string CommandHandler::handleLLen(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 2)
+        return "-Error LLen requires key\r\n";
+    ssize_t len = db.llen(commands[1]);
+    return ":" + std::to_string(len) + "\r\n";
+}
+
+std::string CommandHandler::handleLPush(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 3)
+        return "-Error LPUSH requires key\r\n";
+    std::vector<std::string> list;
+    for (size_t i = 2; i < commands.size(); i++)
+        list.push_back(commands[i]);
+
+    db.lpush(commands[1], list);
+    ssize_t len = db.llen(commands[1]);
+    return ":" + std::to_string(len) + "\r\n";
+}
+
+std::string CommandHandler::handleRPush(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 3)
+        return "-Error RPUSH requires key\r\n";
+
+    std::vector<std::string> list;
+    for (size_t i = 2; i < commands.size(); i++)
+        list.push_back(commands[i]);
+
+    db.rpush(commands[1], list);
+    ssize_t len = db.llen(commands[1]);
+    return ":" + std::to_string(len) + "\r\n";
+}
+
+std::string CommandHandler::handleLPop(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 2)
+        return "-Error LPOP requires key\r\n";
+    std::string value;
+    if (db.lpop(commands[1], value))
+        return "$" + std::to_string(value.size()) + "\r\n" + value + "\r\n";
+    return "$-1\r\n";
+}
+std::string CommandHandler::handleRPop(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 2)
+        return "-Error RPOP requires key\r\n";
+    std::string value;
+    if (db.rpop(commands[1], value))
+        return "$" + std::to_string(value.size()) + "\r\n" + value + "\r\n";
+    return "$-1\r\n";
+}
+
+std::string CommandHandler::handleLRem(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 4)
+        return "-Error LREM requires key, count and value\r\n";
+    try
+    {
+        int count = std::stoi(commands[2]);
+        int removed = db.lrem(commands[1], count, commands[3]);
+        return ":" + std::to_string(removed) + "\r\n";
+    }
+    catch (const std::exception &)
+    {
+        return "-Error Invalid count\r\n";
+    }
+}
+
+std::string CommandHandler::handleLIndex(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 3)
+        return "-Error LINDEX requires key and index\r\n";
+    try
+    {
+        int index = std::stoi(commands[2]);
+        std::string value;
+        if (db.lindex(commands[1], index, value))
+            return "$" + std::to_string(value.size()) + "\r\n" + value + "\r\n";
+        else
+            return "$-1\r\n";
+    }
+    catch (const std::exception &)
+    {
+        return "-Error Invalid count\r\n";
+    }
+}
+
+std::string CommandHandler::handleLSet(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 4)
+        return "-Error LINDEX requires key, index and value\r\n";
+    try
+    {
+        int index = std::stoi(commands[2]);
+        if (db.lset(commands[1], index, commands[3]))
+            return "+OK\r\n";
+        else
+            return "-Error Index out of range\r\n";
+    }
+    catch (const std::exception &)
+    {
+        return "-Error Invalid count\r\n";
+    }
 }
