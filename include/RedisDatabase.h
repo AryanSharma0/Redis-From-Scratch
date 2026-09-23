@@ -15,8 +15,9 @@ public:
     std::vector<std::string> keys();
     std::string type(const std::string &key);
     bool del(const std::string &key);
-    bool expire(const std::string &key, const std::string &seconds);
     bool rename(const std::string &oldKey, const std::string &newKey);
+    // TODO: ! Issue
+    bool expire(const std::string &key, const std::string &seconds);
 
     // Key value operations
     void set(const std::string &key, const std::string &value);

@@ -234,9 +234,10 @@ bool RedisDatabase::lindex(const std::string &key, int index, std::string &value
 {
     std::lock_guard<std::mutex> lock(db_mutex);
     auto it = list_store.find(key);
-    const auto &lst = it->second;
     if (it == list_store.end())
         return false;
+
+    const auto &lst = it->second;
     if (index < 0)
         index = static_cast<ssize_t>(lst.size()) + index;
 
@@ -254,9 +255,11 @@ bool RedisDatabase::lset(const std::string &key, int index, const std::string &v
 {
     std::lock_guard<std::mutex> lock(db_mutex);
     auto it = list_store.find(key);
-    auto &lst = it->second;
+
     if (it == list_store.end())
         return false;
+
+    auto &lst = it->second;
     if (index < 0)
         index = static_cast<ssize_t>(lst.size()) + index;
 
@@ -371,48 +374,69 @@ bool RedisDatabase::dump(const std::string &filename)
 {
     std::lock_guard<std::mutex> lock(db_mutex);
     std::ofstream ofs(filename, std::ios::binary);
+
     if (!ofs)
         return false;
-
     /*
     Memory
 
     K-> Key Value
     L-> List
-    H-> hash
+    H-> Hash
     */
+
     for (const auto &kv : kv_store)
     {
-        ofs << "K " << kv.first << " " << kv.second << "\n";
+        ofs << "K "
+            << "\"" << kv.first << "\" "
+            << "\"" << kv.second << "\""
+            << "\n";
     }
 
     for (const auto &kv : list_store)
     {
-        ofs << "L " << kv.first << " ";
-        for (const auto &item : kv.second)
-            ofs << item << " ";
-        ofs << "\n";
-    }
-    for (const auto &kv : hash_store)
-    {
-        ofs << "H " << kv.first << " ";
+        ofs << "L "
+            << "\"" << kv.first << "\"";
+
         for (const auto &item : kv.second)
         {
-            ofs << item.first << ":" << item.second;
+            ofs << " "
+                << "\"";
+            for (char c : item)
+            {
+                if (c == '"')
+                    ofs << '\\';
+                ofs << c;
+            }
+            ofs << "\"";
+        }
+
+        ofs << "\n";
+    }
+
+    for (const auto &kv : hash_store)
+    {
+        ofs << "H "
+            << "\"" << kv.first << "\"";
+
+        for (const auto &item : kv.second)
+        {
+            ofs << " "
+                << "\"" << item.first << "\" "
+                << "\"" << item.second << "\"";
         }
         ofs << "\n";
     }
     return true;
 }
-
 bool RedisDatabase::load(const std::string &filename)
 {
     std::lock_guard<std::mutex> lock(db_mutex);
     std::ifstream ifs(filename, std::ios::binary);
+
     if (!ifs)
         return false;
 
-    // Removing the existing data
     kv_store.clear();
     hash_store.clear();
     list_store.clear();
@@ -421,47 +445,88 @@ bool RedisDatabase::load(const std::string &filename)
 
     while (getline(ifs, line))
     {
-        std::istringstream iss(line);
-        char type;
-        iss >> type;
+        std::vector<std::string> parts;
+        std::string part;
+        bool inQuotes = false;
+
+        for (size_t i = 0; i < line.size(); ++i)
+        {
+            char c = line[i];
+
+            if (c == '\\' &&
+                inQuotes &&
+                i + 1 < line.size() &&
+                line[i + 1] == '"')
+            {
+                part += '"';
+                ++i;
+                continue;
+            }
+
+            if (c == '"')
+            {
+                inQuotes = !inQuotes;
+                continue;
+            }
+
+            if (std::isspace(
+                    static_cast<unsigned char>(c)) &&
+                !inQuotes)
+            {
+                if (!part.empty())
+                {
+                    parts.push_back(part);
+                    part.clear();
+                }
+            }
+            else
+            {
+                part += c;
+            }
+        }
+
+        if (!part.empty())
+            parts.push_back(part);
+
+        if (parts.empty())
+            continue;
+
+        char type = parts[0][0];
+
         if (type == 'K')
         {
-            std::string key, value;
-            iss >> key >> value;
-            kv_store[key] = value;
+            if (parts.size() >= 3)
+            {
+                kv_store[parts[1]] = parts[2];
+            }
         }
         else if (type == 'L')
         {
-            std::vector<std::string> list;
-            std::string key;
-            iss >> key;
-            std::string item;
-            while (iss >> item)
+            if (parts.size() >= 2)
             {
-                list.push_back(item);
-                /* code */
+                std::vector<std::string> list;
+
+                for (size_t i = 2; i < parts.size(); ++i)
+                {
+                    list.push_back(parts[i]);
+                }
+
+                list_store[parts[1]] = list;
             }
-            list_store[key] = list;
         }
         else if (type == 'H')
         {
-            std::unordered_map<std::string, std::string> mp;
-            std::string key, item;
-            iss >> key;
-
-            while (iss >> item)
+            if (parts.size() >= 2)
             {
-                auto pos = item.find(':');
+                std::unordered_map<std::string, std::string> mp;
 
-                std::string key, value;
-                if (pos != std::string::npos)
+                for (size_t i = 2; i + 1 < parts.size(); i += 2)
                 {
-                    key = item.substr(0, pos);
-                    value = item.substr(pos + 1);
-                    mp[key] = value;
+                    mp[parts[i]] = parts[i + 1];
                 }
+
+                hash_store[parts[1]] = mp;
             }
-            hash_store[key] = mp;
         }
     }
 

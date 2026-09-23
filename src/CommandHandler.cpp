@@ -578,10 +578,8 @@ std::string CommandHandler::handleHKeys(
     oss << "*" << keys.size() << "\r\n";
     for (auto &key : keys)
     {
-        oss << "$" + key.size() << "\r\n"
-            << key << "\r\n ";
-        oss << "$" + key.size() << "\r\n"
-            << key << "\r\n ";
+        oss << "$" + std::to_string(key.size()) << "\r\n"
+            << key << "\r\n";
     }
     return oss.str();
 }
@@ -592,15 +590,13 @@ std::string CommandHandler::handleHVals(
 {
     if (commands.size() < 2)
         return "-Error HVALS requires key \r\n";
-    auto vals = db.hkeys(commands[1]);
+    auto vals = db.hvals(commands[1]);
     std::ostringstream oss;
     oss << "*" << vals.size() << "\r\n";
     for (auto &val : vals)
     {
-        oss << "$" + val.size() << "\r\n"
-            << val << "\r\n ";
-        oss << "$" + val.size() << "\r\n"
-            << val << "\r\n ";
+        oss << "$" + std::to_string(val.size()) << "\r\n"
+            << val << "\r\n";
     }
     return oss.str();
 }
@@ -610,16 +606,17 @@ std::string CommandHandler::handleHGetAll(
     const std::vector<std::string> &commands)
 {
     if (commands.size() < 2)
-        return "-Error HGETTAIL requires key \r\n";
+        return "-Error HGETALL requires key \r\n";
     auto hash = db.hgetall(commands[1]);
     std::ostringstream oss;
-    oss << "*" << hash.size() << "\r\n";
+    // hash.size() * 2 as key and value we have.
+    oss << "*" << hash.size() * 2 << "\r\n";
     for (auto &pair : hash)
     {
-        oss << "$" + pair.first.size() << "\r\n"
-            << pair.first << "\r\n ";
-        oss << "$" + pair.second.size() << "\r\n"
-            << pair.second << "\r\n ";
+        oss << "$" << pair.first.size() << "\r\n"
+            << pair.first << "\r\n";
+        oss << "$" << pair.second.size() << "\r\n"
+            << pair.second << "\r\n";
     }
     return oss.str();
 }
@@ -628,7 +625,7 @@ std::string CommandHandler::handleHMSet(
     RedisDatabase &db,
     const std::vector<std::string> &commands)
 {
-    if (commands.size() < 4 || (commands.size() % 2 == 0))
+    if (commands.size() < 4 || (commands.size() % 2 == 1))
         return "-Error HMSET requires key, field and value pairs \r\n";
     std::vector<std::pair<std::string, std::string>> fieldvalues;
     for (size_t i = 2; i < commands.size(); i += 2)

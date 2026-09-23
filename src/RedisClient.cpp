@@ -111,11 +111,30 @@ std::string parseRESP(const std::string &response, size_t &pos)
 
 std::string formatCommand(const std::string &command)
 {
-    std::istringstream iss(command);
     std::vector<std::string> parts;
     std::string part;
+    bool inQuotes = false;
 
-    while (iss >> part)
+    for (char c : command)
+    {
+        if (c == '"')
+        {
+            inQuotes = !inQuotes;
+            continue;
+        }
+
+        if (std::isspace(static_cast<unsigned char>(c)) && !inQuotes)
+        {
+            parts.push_back(part);
+            part.clear();
+        }
+        else
+        {
+            part += c;
+        }
+    }
+
+    if (!part.empty() || inQuotes)
         parts.push_back(part);
 
     if (parts.empty())
