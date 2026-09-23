@@ -1,96 +1,362 @@
 # Redis From Scratch
 
-A Redis-like in-memory database server built from scratch in C++ for learning systems programming, networking, and database internals.
+A Redis-like in-memory database server built from scratch in **C++17**.
 
-## Current Progress
+## Features
 
-* TCP socket server
-* IPv4 support
-* Socket creation
-* Socket binding
-* Configurable port
-* TCP connection listening
-* Client connection acceptance
-* Multi-client handling using threads
-* Basic command handling
-* In-memory key-value storage
+* TCP server
+* Multiple client connections
+* RESP-style command parsing
+* String storage
 * List storage
 * Hash storage
-* Thread-safe database access
-* Basic `DEL` operation
-* Key expiration support
-* Database persistence using `dump.rdb`
-* Database loading from `dump.rdb`
-* Automatic periodic database persistence
+* Key expiration
+* Persistence
+* Thread synchronization
 
-## Project Structure
-
-```text
-Redis-From-Scratch/
-├── include/
-│   ├── RedisServer.h
-│   ├── RedisDatabase.h
-│   └── CommandHandler.h
-│
-├── src/
-│   ├── main.cpp
-│   ├── RedisServer.cpp
-│   ├── RedisDatabase.cpp
-│   └── CommandHandler.cpp
-│
-├── build/
-├── dump.rdb
-└── Makefile
-```
+---
 
 ## Build
-
-Using the Makefile:
 
 ```bash
 make
 ```
 
-Or compile manually:
-
-```bash
-g++ -std=c++17 -Wall -Wextra -pthread \
-    src/main.cpp \
-    src/RedisServer.cpp \
-    src/RedisDatabase.cpp \
-    src/CommandHandler.cpp \
-    -Iinclude \
-    -o my_redis_server
-```
-
 ## Run
-
-Default port:
 
 ```bash
 ./my_redis_server
 ```
 
-Custom port:
+Run on a custom port:
 
 ```bash
 ./my_redis_server 6379
+
+./redis_client
 ```
 
-The server starts and listens for TCP client connections on the configured port.
+---
 
-## Purpose
+# Commands
 
-This project is being developed from scratch to understand how an in-memory database such as Redis works internally, including:
+## PING
 
-* TCP networking
-* Socket programming
-* Concurrent client handling
-* Command processing
-* In-memory data structures
-* Thread synchronization
-* Key expiration
+Check if the server is running.
+
+```text
+PING
+```
+
+Response:
+
+```text
+PONG
+```
+
+---
+
+## ECHO
+
+Return a message.
+
+```text
+ECHO hello
+```
+
+With spaces:
+
+```text
+ECHO "hello world"
+```
+
+---
+
+# String Commands
+
+## SET
+
+Store a value.
+
+```text
+SET name Aryan
+```
+
+With spaces:
+
+```text
+SET name "Aryan Sharma"
+```
+
+## GET
+
+Get a value.
+
+```text
+GET name
+```
+
+---
+
+# Key Commands
+
+## DEL
+
+Delete a key.
+
+```text
+DEL name
+```
+
+## UNLINK
+
+Delete a key.
+
+```text
+UNLINK name
+```
+
+## EXPIRE
+
+Set expiration time in seconds.
+
+```text
+EXPIRE name 60
+```
+
+## RENAME
+
+Rename a key.
+
+```text
+RENAME old_name new_name
+```
+
+## KEYS
+
+Show stored keys.
+
+```text
+KEYS
+```
+
+## TYPE
+
+Check the type of a key.
+
+```text
+TYPE name
+```
+
+Possible results:
+
+```text
+string
+list
+hash
+none
+```
+
+## FLUSHALL
+
+Remove all stored data.
+
+```text
+FLUSHALL
+```
+
+---
+
+# List Commands
+
+## LPUSH
+
+Add elements to the beginning of a list.
+
+```text
+LPUSH mylist a
+```
+
+Multiple values:
+
+```text
+LPUSH mylist a b c
+```
+
+## RPUSH
+
+Add elements to the end of a list.
+
+```text
+RPUSH mylist a
+```
+
+Multiple values:
+
+```text
+RPUSH mylist a b c
+```
+
+## LLEN
+
+Get the length of a list.
+
+```text
+LLEN mylist
+```
+
+## LPOP
+
+Remove and return the first element.
+
+```text
+LPOP mylist
+```
+
+## RPOP
+
+Remove and return the last element.
+
+```text
+RPOP mylist
+```
+
+## LREM
+
+Remove matching elements.
+
+```text
+LREM mylist 2 value
+```
+
+* `count > 0` — remove from the beginning
+* `count < 0` — remove from the end
+* `count = 0` — remove all matching elements
+
+## LINDEX
+
+Get an element by index.
+
+```text
+LINDEX mylist 0
+```
+
+Last element:
+
+```text
+LINDEX mylist -1
+```
+
+## LSET
+
+Replace an element at an index.
+
+```text
+LSET mylist 0 new_value
+```
+
+Negative indexes are supported.
+
+---
+
+# Hash Commands
+
+Hash functionality is currently **under development**.
+
+Hash structure:
+
+```text
+key -> field -> value
+```
+
+Example:
+
+```text
+user
+ ├── name -> Aryan
+ └── age  -> 23
+```
+
+Hash commands will be added as they are implemented and tested.
+
+---
+
+# Example
+
+```text
+PING
+
+SET name Aryan
+
+GET name
+
+RPUSH mylist one two three
+
+LLEN mylist
+
+LINDEX mylist 0
+
+LPOP mylist
+
+RPOP mylist
+
+DEL name
+```
+
+---
+
+# Project Structure
+
+```text
+.
+├── include/
+│   ├── RedisServer.h
+│   ├── RedisDatabase.h
+│   ├── CommandHandler.h
+│   └── RESPParser.h
+│
+├── src/
+│   ├── main.cpp
+│   ├── RedisServer.cpp
+│   ├── RedisDatabase.cpp
+│   ├── CommandHandler.cpp
+│   └── RESPParser.cpp
+│
+├── Makefile
+├── dump.rdb
+└── README.md
+```
+
+---
+
+# Command Summary
+
+| Category | Commands                                                                      |
+| -------- | ----------------------------------------------------------------------------- |
+| Basic    | `PING`, `ECHO`                                                                |
+| Key      | `SET`, `GET`, `DEL`, `UNLINK`, `EXPIRE`, `RENAME`, `KEYS`, `TYPE`, `FLUSHALL` |
+| List     | `LPUSH`, `RPUSH`, `LLEN`, `LPOP`, `RPOP`, `LREM`, `LINDEX`, `LSET`            |
+| Hash     | In development                                                                |
+
+---
+
+# Status
+
+### Implemented
+
+* TCP server
+* Client connections
+* RESP parsing
+* String commands
+* List commands
+* Key management
+* Expiration
 * Persistence
-* Database loading and recovery
+* Multi-client support
 
-This is a learning project and is not intended to be a production replacement for Redis.
+### In Progress
+
+* Hash commands
+* Additional Redis commands
+* Improved persistence
+* More testing
