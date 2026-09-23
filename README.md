@@ -32,7 +32,11 @@ Run on a custom port:
 
 ```bash
 ./my_redis_server 6379
+```
 
+Start the client:
+
+```bash
 ./redis_client
 ```
 
@@ -261,8 +265,6 @@ Negative indexes are supported.
 
 # Hash Commands
 
-Hash functionality is currently **under development**.
-
 Hash structure:
 
 ```text
@@ -277,28 +279,147 @@ user
  └── age  -> 23
 ```
 
-Hash commands will be added as they are implemented and tested.
+## HSET
+
+Set a field and value inside a hash.
+
+```text
+HSET user name Aryan
+```
+
+Another field:
+
+```text
+HSET user age 23
+```
 
 ---
 
-# Example
+## HGET
+
+Get a field value.
+
+```text
+HGET user name
+```
+
+---
+
+## HEXISTS
+
+Check whether a field exists.
+
+```text
+HEXISTS user name
+```
+
+Response:
+
+```text
+1
+```
+
+or:
+
+```text
+0
+```
+
+---
+
+## HDEL
+
+Delete a field from a hash.
+
+```text
+HDEL user name
+```
+
+---
+
+## HLEN
+
+Get the number of fields in a hash.
+
+```text
+HLEN user
+```
+
+---
+
+## HKEYS
+
+Get all fields in a hash.
+
+```text
+HKEYS user
+```
+
+---
+
+## HVALS
+
+Get all values in a hash.
+
+```text
+HVALS user
+```
+
+---
+
+## HGETALL
+
+Get all fields and values from a hash.
+
+```text
+HGETALL user
+```
+
+---
+
+## HMSET
+
+Set multiple field-value pairs.
+
+```text
+HMSET user name Aryan age 23 city Patna
+```
+
+The format is:
+
+```text
+HMSET key field value field value ...
+```
+
+Example:
+
+```text
+HMSET user name Aryan age 23 city Patna
+```
+
+---
+
+# Example Session
 
 ```text
 PING
 
 SET name Aryan
-
 GET name
 
 RPUSH mylist one two three
-
 LLEN mylist
-
 LINDEX mylist 0
-
 LPOP mylist
-
 RPOP mylist
+
+HSET user name Aryan
+HSET user age 23
+HGET user name
+HLEN user
+HKEYS user
+HVALS user
+HGETALL user
 
 DEL name
 ```
@@ -331,12 +452,12 @@ DEL name
 
 # Command Summary
 
-| Category | Commands                                                                      |
-| -------- | ----------------------------------------------------------------------------- |
-| Basic    | `PING`, `ECHO`                                                                |
-| Key      | `SET`, `GET`, `DEL`, `UNLINK`, `EXPIRE`, `RENAME`, `KEYS`, `TYPE`, `FLUSHALL` |
-| List     | `LPUSH`, `RPUSH`, `LLEN`, `LPOP`, `RPOP`, `LREM`, `LINDEX`, `LSET`            |
-| Hash     | In development                                                                |
+| Category | Commands                                                                        |
+| -------- | ------------------------------------------------------------------------------- |
+| Basic    | `PING`, `ECHO`                                                                  |
+| Key      | `SET`, `GET`, `DEL`, `UNLINK`, `EXPIRE`, `RENAME`, `KEYS`, `TYPE`, `FLUSHALL`   |
+| List     | `LPUSH`, `RPUSH`, `LLEN`, `LPOP`, `RPOP`, `LREM`, `LINDEX`, `LSET`              |
+| Hash     | `HSET`, `HGET`, `HEXISTS`, `HDEL`, `HLEN`, `HKEYS`, `HVALS`, `HGETALL`, `HMSET` |
 
 ---
 
@@ -349,6 +470,7 @@ DEL name
 * RESP parsing
 * String commands
 * List commands
+* Hash commands
 * Key management
 * Expiration
 * Persistence
@@ -356,7 +478,5 @@ DEL name
 
 ### In Progress
 
-* Hash commands
-* Additional Redis commands
 * Improved persistence
 * More testing
