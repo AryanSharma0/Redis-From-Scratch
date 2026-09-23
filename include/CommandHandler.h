@@ -84,6 +84,46 @@ private:
     std::string handleLSet(
         RedisDatabase &db,
         const std::vector<std::string> &commands);
+
+    std::string handleLSet(
+        RedisDatabase &db,
+        const std::vector<std::string> &commands);
+
+    std::string handleHSet(
+        RedisDatabase &db,
+        const std::vector<std::string> &commands);
+
+    std::string handleHGet(
+        RedisDatabase &db,
+        const std::vector<std::string> &commands);
+
+    std::string handleHExist(
+        RedisDatabase &db,
+        const std::vector<std::string> &commands);
+
+    std::string handleHDel(
+        RedisDatabase &db,
+        const std::vector<std::string> &commands);
+
+    std::string handleHLen(
+        RedisDatabase &db,
+        const std::vector<std::string> &commands);
+
+    std::string handleHKeys(
+        RedisDatabase &db,
+        const std::vector<std::string> &commands);
+
+    std::string handleHVals(
+        RedisDatabase &db,
+        const std::vector<std::string> &commands);
+
+    std::string handleHGetAll(
+        RedisDatabase &db,
+        const std::vector<std::string> &commands);
+
+    std::string handleHMSet(
+        RedisDatabase &db,
+        const std::vector<std::string> &commands);
 };
 
 #endif

@@ -32,6 +32,17 @@ public:
     bool lindex(const std::string &key, int index, std::string &value);
     bool lset(const std::string &key, int index, const std::string &value);
 
+    // Hash Operations
+    bool hset(const std::string &key, const std::string &field, const std::string &value);
+    bool hget(const std::string &key, const std::string &field, std::string &value);
+    bool hexist(const std::string &key, const std::string &field);
+    bool hdel(const std::string &key, const std::string &field);
+    ssize_t hlen(const std::string &key);
+    std::vector<std::string> hkeys(const std::string &key);
+    std::vector<std::string> hvals(const std::string &key);
+    std::unordered_map<std::string, std::string> hgetall(const std::string &key);
+    bool hmset(const std::string &key, const std::vector<std::pair<std::string, std::string>> &fieldvalues);
+
     // Persistance: dump/load db file
     bool dump(const std::string &filename);
     bool load(const std::string &filename);

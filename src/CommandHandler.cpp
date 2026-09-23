@@ -6,6 +6,7 @@
 #include <cctype>
 #include <string>
 #include <vector>
+#include <sstream>
 
 std::string CommandHandler::processCommand(
     const std::string &commandLine)
@@ -127,6 +128,33 @@ std::string CommandHandler::processCommand(
     {
         return handleLSet(db, commands);
     }
+
+    if (command == "HSET")
+        return handleHSet(db, commands);
+
+    if (command == "HGET")
+        return handleHGet(db, commands);
+
+    if (command == "HEXISTS")
+        return handleHExist(db, commands);
+
+    if (command == "HDEL")
+        return handleHDel(db, commands);
+
+    if (command == "HLEN")
+        return handleHLen(db, commands);
+
+    if (command == "HKEYS")
+        return handleHKeys(db, commands);
+
+    if (command == "HVALS")
+        return handleHVals(db, commands);
+
+    if (command == "HGETALL")
+        return handleHGetAll(db, commands);
+
+    if (command == "HMSET")
+        return handleHMSet(db, commands);
 
     return "-Error unknown command\r\n";
 }
@@ -478,5 +506,134 @@ std::string CommandHandler::handleLSet(
     catch (const std::exception &)
     {
         return "-Error Invalid count\r\n";
+    }
+}
+
+// ========= Hash Operations =========
+std::string CommandHandler::handleHSet(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 4)
+        return "-Error HSET requires key, field and value\r\n";
+    db.hset(commands[1], commands[2], commands[3]);
+    return ":1\r\n";
+}
+
+std::string CommandHandler::handleHGet(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 3)
+        return "-Error HGET requires key and field \r\n";
+
+    std::string value;
+    if (db.hget(commands[1], commands[2], value))
+        return "$" + std::to_string(value.size()) + "\r\n" + value + "\r\n";
+    else
+        "$-1\r\n";
+}
+
+std::string CommandHandler::handleHExist(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 3)
+        return "-Error HEXIST requires key and field \r\n";
+
+    bool exist = db.hexist(commands[1], commands[2]);
+    return ":" + std::to_string(exist ? 1 : 0) + "\r\n";
+}
+
+std::string CommandHandler::handleHDel(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 3)
+        return "-Error HDEL requires key and field \r\n";
+
+    bool res = db.hdel(commands[1], commands[2]);
+    return ":" + std::to_string(res ? 1 : 0) + "\r\n";
+}
+
+std::string CommandHandler::handleHLen(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 2)
+        return "-Error HLEN requires key  \r\n";
+
+    ssize_t len = db.hlen(commands[1]);
+    return ":" + std::to_string(len) + "\r\n";
+}
+
+std::string CommandHandler::handleHKeys(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 2)
+        return "-Error HKEYS requires key \r\n";
+    auto keys = db.hkeys(commands[1]);
+    std::ostringstream oss;
+    oss << "*" << keys.size() << "\r\n";
+    for (auto &key : keys)
+    {
+        oss << "$" + key.size() << "\r\n"
+            << key << "\r\n ";
+        oss << "$" + key.size() << "\r\n"
+            << key << "\r\n ";
+    }
+    return oss.str();
+}
+
+std::string CommandHandler::handleHVals(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 2)
+        return "-Error HVALS requires key \r\n";
+    auto vals = db.hkeys(commands[1]);
+    std::ostringstream oss;
+    oss << "*" << vals.size() << "\r\n";
+    for (auto &val : vals)
+    {
+        oss << "$" + val.size() << "\r\n"
+            << val << "\r\n ";
+        oss << "$" + val.size() << "\r\n"
+            << val << "\r\n ";
+    }
+    return oss.str();
+}
+
+std::string CommandHandler::handleHGetAll(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 2)
+        return "-Error HGETTAIL requires key \r\n";
+    auto hash = db.hgetall(commands[1]);
+    std::ostringstream oss;
+    oss << "*" << hash.size() << "\r\n";
+    for (auto &pair : hash)
+    {
+        oss << "$" + pair.first.size() << "\r\n"
+            << pair.first << "\r\n ";
+        oss << "$" + pair.second.size() << "\r\n"
+            << pair.second << "\r\n ";
+    }
+}
+
+std::string CommandHandler::handleHMSet(
+    RedisDatabase &db,
+    const std::vector<std::string> &commands)
+{
+    if (commands.size() < 4 || (commands.size() % 2 == 0))
+        return "-Error HMSET requires key, field and value pairs \r\n";
+    std::vector<std::pair<std::string, std::string>> fieldvalues;
+    for (ssize_t i = 2; i < commands.size(); i += 2)
+    {
+        fieldvalues.emplace_back(commands[i], commands[i + 1]);
+        db.hmset(commands[1], fieldvalues);
+        return "+Ok\r\n";
     }
 }
