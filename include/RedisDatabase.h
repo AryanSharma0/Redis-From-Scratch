@@ -5,6 +5,8 @@
 #include <unordered_map>
 #include <vector>
 #include <chrono>
+#include <thread>
+#include <atomic>
 class RedisDatabase
 {
 public:
@@ -16,7 +18,6 @@ public:
     std::string type(const std::string &key);
     bool del(const std::string &key);
     bool rename(const std::string &oldKey, const std::string &newKey);
-    // TODO: ! Issue
     bool expire(const std::string &key, const std::string &seconds);
 
     // Key value operations
@@ -48,13 +49,20 @@ public:
     bool dump(const std::string &filename);
     bool load(const std::string &filename);
 
+    // Internal function
+    bool isExpired(const std::string &key);
+    long long getRemainingTTL(const std::string &key);
+
 private:
     RedisDatabase() = default;
     ~RedisDatabase() = default;
     RedisDatabase(const RedisDatabase &) = delete;
     RedisDatabase &operator=(const RedisDatabase &) = delete;
 
+    std::atomic<bool> persistenceRunning{true};
+    std::thread persistenceThread;
     std::mutex db_mutex;
+
     std::unordered_map<std::string, std::string> kv_store;
     std::unordered_map<std::string, std::vector<std::string>> list_store;
     std::unordered_map<std::string, std::unordered_map<std::string, std::string>> hash_store;

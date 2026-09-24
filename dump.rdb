@@ -1,4 +1,4 @@
-K session:1 "data"
-K car audi
-L mylist "a" "new "b" "c" "d" "4" 
-L mytest 3 "2" "5" "44" 
+K "watch" "titan"
+E "watch" 38
+L "list" "4" "Aman Bhadwa" "Akash yadav" "Aman Sharma"
+H "htest" "name" "aryan"

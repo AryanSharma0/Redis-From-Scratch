@@ -11,6 +11,43 @@ RedisDatabase &RedisDatabase::getInstance()
     return instance;
 }
 
+// Internal Function
+bool RedisDatabase::isExpired(const std::string &key)
+{
+    auto it = expired_map.find(key);
+
+    if (it == expired_map.end())
+        return false;
+
+    if (std::chrono::steady_clock::now() < it->second)
+        return false;
+
+    kv_store.erase(key);
+    list_store.erase(key);
+    hash_store.erase(key);
+    expired_map.erase(it);
+
+    return true;
+}
+
+long long RedisDatabase::getRemainingTTL(
+    const std::string &key)
+{
+    auto it = expired_map.find(key);
+
+    if (it == expired_map.end())
+        return -1;
+
+    auto now = std::chrono::steady_clock::now();
+
+    if (it->second <= now)
+        return 0;
+
+    return std::chrono::duration_cast<std::chrono::seconds>(
+               it->second - now)
+        .count();
+}
+
 // Commands operations
 
 bool RedisDatabase::flushAll()
@@ -19,6 +56,7 @@ bool RedisDatabase::flushAll()
     kv_store.clear();
     list_store.clear();
     hash_store.clear();
+    expired_map.clear();
     return true;
 };
 
@@ -26,6 +64,26 @@ std::vector<std::string> RedisDatabase::keys()
 {
     std::lock_guard<std::mutex> lock(db_mutex);
     std::vector<std::string> res;
+
+    for (auto it = expired_map.begin();
+         it != expired_map.end();)
+    {
+        if (std::chrono::steady_clock::now() >= it->second)
+        {
+            const std::string key = it->first;
+
+            kv_store.erase(key);
+            list_store.erase(key);
+            hash_store.erase(key);
+
+            it = expired_map.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
     for (const auto &pair : kv_store)
     {
         res.push_back(pair.first);
@@ -44,6 +102,9 @@ std::vector<std::string> RedisDatabase::keys()
 std::string RedisDatabase::type(const std::string &key)
 {
     std::lock_guard<std::mutex> lock(db_mutex);
+    if (isExpired(key))
+        return "none";
+
     if (kv_store.find(key) != kv_store.end())
         return "string";
     else if (list_store.find(key) != list_store.end())
@@ -62,23 +123,54 @@ bool RedisDatabase::del(const std::string &key)
     earsed |= list_store.erase(key) > 0;
     earsed |= hash_store.erase(key) > 0;
 
+    expired_map.erase(key);
+
     return earsed;
 };
 
 bool RedisDatabase::expire(const std::string &key, const std::string &seconds)
 {
     std::lock_guard<std::mutex> lock(db_mutex);
-    bool exist = (kv_store.find(key) != kv_store.end()) || (list_store.find(key) != list_store.end()) || (hash_store.find(key) != hash_store.end());
-    if (!exist)
+
+    if (isExpired(key))
         return false;
 
-    expired_map[key] = std::chrono::steady_clock::now() + std::chrono::seconds(std::stoi(seconds));
+    bool exists =
+        kv_store.find(key) != kv_store.end() ||
+        list_store.find(key) != list_store.end() ||
+        hash_store.find(key) != hash_store.end();
+
+    if (!exists)
+        return false;
+
+    int ttl;
+
+    try
+    {
+        ttl = std::stoi(seconds);
+    }
+    catch (...)
+    {
+        return false;
+    }
+
+    if (ttl < 0)
+        return false;
+
+    expired_map[key] =
+        std::chrono::steady_clock::now() +
+        std::chrono::seconds(ttl);
+
     return true;
-};
+}
 
 bool RedisDatabase::rename(const std::string &oldKey, const std::string &newKey)
 {
     std::lock_guard<std::mutex> lock(db_mutex);
+
+    if (isExpired(oldKey))
+        return false;
+
     auto kitem = kv_store.find(oldKey);
     auto litem = list_store.find(oldKey);
     auto hitem = hash_store.find(oldKey);
@@ -116,11 +208,15 @@ void RedisDatabase::set(const std::string &key, const std::string &value)
 {
     std::lock_guard<std::mutex> lock(db_mutex);
     kv_store[key] = value;
+    expired_map.erase(key);
 };
 
 bool RedisDatabase::get(const std::string &key, std::string &value)
 {
     std::lock_guard<std::mutex> lock(db_mutex);
+    if (isExpired(key))
+        return false;
+
     auto it = kv_store.find(key);
     if (it != kv_store.end())
     {
@@ -383,6 +479,7 @@ bool RedisDatabase::dump(const std::string &filename)
     K-> Key Value
     L-> List
     H-> Hash
+    E -> Key Remaining TTL
     */
 
     for (const auto &kv : kv_store)
@@ -391,6 +488,16 @@ bool RedisDatabase::dump(const std::string &filename)
             << "\"" << kv.first << "\" "
             << "\"" << kv.second << "\""
             << "\n";
+
+        long long ttl = getRemainingTTL(kv.first);
+
+        if (ttl > 0)
+        {
+            ofs << "E "
+                << "\"" << kv.first << "\" "
+                << ttl
+                << "\n";
+        }
     }
 
     for (const auto &kv : list_store)
@@ -412,6 +519,16 @@ bool RedisDatabase::dump(const std::string &filename)
         }
 
         ofs << "\n";
+
+        long long ttl = getRemainingTTL(kv.first);
+
+        if (ttl > 0)
+        {
+            ofs << "E "
+                << "\"" << kv.first << "\" "
+                << ttl
+                << "\n";
+        }
     }
 
     for (const auto &kv : hash_store)
@@ -426,9 +543,20 @@ bool RedisDatabase::dump(const std::string &filename)
                 << "\"" << item.second << "\"";
         }
         ofs << "\n";
+
+        long long ttl = getRemainingTTL(kv.first);
+
+        if (ttl > 0)
+        {
+            ofs << "E "
+                << "\"" << kv.first << "\" "
+                << ttl
+                << "\n";
+        }
     }
     return true;
 }
+
 bool RedisDatabase::load(const std::string &filename)
 {
     std::lock_guard<std::mutex> lock(db_mutex);
@@ -526,6 +654,28 @@ bool RedisDatabase::load(const std::string &filename)
                 }
 
                 hash_store[parts[1]] = mp;
+            }
+        }
+        else if (type == 'E')
+        {
+            if (parts.size() >= 3)
+            {
+                try
+                {
+                    long long seconds =
+                        std::stoll(parts[2]);
+
+                    if (seconds > 0)
+                    {
+                        expired_map[parts[1]] =
+                            std::chrono::steady_clock::now() +
+                            std::chrono::seconds(seconds);
+                    }
+                }
+                catch (...)
+                {
+                    continue;
+                }
             }
         }
     }

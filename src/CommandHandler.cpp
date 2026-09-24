@@ -629,9 +629,8 @@ std::string CommandHandler::handleHMSet(
         return "-Error HMSET requires key, field and value pairs \r\n";
     std::vector<std::pair<std::string, std::string>> fieldvalues;
     for (size_t i = 2; i < commands.size(); i += 2)
-    {
         fieldvalues.emplace_back(commands[i], commands[i + 1]);
-        db.hmset(commands[1], fieldvalues);
-    }
-    return "+Ok\r\n";
+
+    db.hmset(commands[1], fieldvalues);
+    return "+OK\r\n";
 }
